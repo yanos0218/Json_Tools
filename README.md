@@ -14,3 +14,7 @@
   - 검색된 결과물 중 삭제하고 싶은 대상만 선택해서 삭제하는 기능
 - file_version_info.txt
   - File 속성 정보
+
+etc
+- '.exe' 생성 명령어
+  - pyinstaller --onefile --windowed main_ui.py --version-file file_version_info.txt
