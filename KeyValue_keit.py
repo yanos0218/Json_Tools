@@ -10,6 +10,8 @@ def search_in_json_files(directory, selected_type):
     fields_travel = ['신청일', '문서번호', '출장자 성명', '출장사 소속', '출장사 직위', '출장기간', '출장목적지', '출장목적', '출장내용', '출장결과']
     fields_meeting = ['회의날짜', '회의장소', '참여자 성명', '참여자 소속', '회의주제', '항목']
     subfields_meeting = ['참여자소속', '참석자소속', '회의주제']
+    fields_card = ['카드사명', '카드번호', '카드이용일', '카드매입사', '가맹점번호', '가맹점명', '가맹점업종', '공급액', '부가세', '합계금액']
+    fields_travel_report = ['기안일', '문서번호', '출장자 성명', '출장자 소속', '출장자 직위', '출장기간', '출장목적지', '출장목적', '출장내용', '출장결과']
     
     for filename in os.listdir(directory):
         if filename.endswith('.json'):
@@ -21,7 +23,7 @@ def search_in_json_files(directory, selected_type):
                     content = json.load(file)
                     for document in content.get('document', []):
                         docu_type = document.get('docu_type')
-                        if selected_type == '전체' and docu_type not in ['출장신청서', '회의록']:
+                        if selected_type == '전체' and docu_type not in ['출장신청서', '회의록', '카드매출전표', '출장결과보고서']:
                             continue
                         if (selected_type == '전체' or docu_type == selected_type):
                             doc_result = {
@@ -57,6 +59,18 @@ def search_in_json_files(directory, selected_type):
                                         doc_result[field] = items_content
                                     else:
                                         doc_result[field] = 'empty'
+                            elif docu_type == '카드매출전표':
+                                for field in fields_card:
+                                    field_content = document.get('contents', {}).get(field, {}).get('content', 'empty')
+                                    if field_content == '':
+                                        field_content = 'null'
+                                    doc_result[field] = field_content
+                            elif docu_type == '출장결과보고서':
+                                for field in fields_travel_report:
+                                    field_content = document.get('contents', {}).get(field, {}).get('content', 'empty')
+                                    if field_content == '':
+                                        field_content = 'null'
+                                    doc_result[field] = field_content
                             results[filename].append(doc_result)
             except Exception as e:
                 messagebox.showerror("오류", f"{filename} 파일을 처리하는 중 오류가 발생했습니다: {e}")
@@ -73,8 +87,13 @@ def display_results(result_list, text_results):
     if not result_list:
         text_results.insert(tk.END, "검색 결과가 없습니다.", "content")
         return
+    
+    current_filename = None
     for result in result_list:
-        text_results.insert(tk.END, f"파일명: {result['파일명']}\n", "filename")
+        if result['파일명'] != current_filename:
+            current_filename = result['파일명']
+            text_results.insert(tk.END, f"파일명: {result['파일명']}\n", "filename")
+        
         text_results.insert(tk.END, f"문서 유형: {result['문서 유형']}\n", "doctype")
         text_results.insert(tk.END, f"페이지 번호: {result['페이지 번호']}\n", "pagenum")
         for key, value in result.items():
@@ -134,7 +153,7 @@ def create_search_tab(tab):
     label_doc_type = tk.Label(tab, text="문서 유형 선택:")
     label_doc_type.grid(row=1, column=0, padx=10, pady=5, sticky='w')
 
-    combo_doc_type = ttk.Combobox(tab, values=['전체', '출장신청서', '회의록'], state='readonly')
+    combo_doc_type = ttk.Combobox(tab, values=['전체', '출장신청서', '회의록', '카드매출전표', '출장결과보고서'], state='readonly')
     combo_doc_type.current(0)
     combo_doc_type.grid(row=1, column=1, padx=10, pady=5, sticky='w')
 
