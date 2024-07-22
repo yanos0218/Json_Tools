@@ -210,7 +210,7 @@ def create_info_tab(tab):
 if __name__ == "__main__":
     root = tk.Tk()
     root.title("파일 정보 검색 및 분석")
-    root.geometry("800x600")  # 기본 창 크기 설정
+    root.geometry("1152x648")  # 기본 창 크기 설정
 
     tab_control = ttk.Notebook(root)
     tab3 = ttk.Frame(tab_control)
