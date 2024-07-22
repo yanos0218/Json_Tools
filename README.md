@@ -1,7 +1,7 @@
-용도
+**용도**
 - Json 확장자 File 대상으로 File 내의 특정 문자를 정규식 패턴으로 찾기 위함임
 
-설명
+**설명**
 - main_ui.py
   - main UI로 각 Tab에 대한 정보를 가져다가 활용한다
   - 각 Tab의 기능의 Code를 개별적 관리하기 위함
@@ -22,6 +22,6 @@
   - File 속성 정보
   - 제품 전체 중 일부 File의 Code가 변경된 경우 버전은 수정됨
 
-etc
+**etc**
 - '.exe' 생성 명령어
   - pyinstaller --onefile --windowed main_ui.py --version-file file_version_info.txt
