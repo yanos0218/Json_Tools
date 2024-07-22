@@ -36,7 +36,6 @@ def adjust_column_widths(treeview):
             max_width = max(max_width, 55)  # 최소 너비 55 설정
         treeview.column(col, width=max_width, minwidth=max_width, stretch=tk.NO)  # 열 너비 고정
         column_widths[col] = max_width
-        treeview.update_idletasks()  # 강제로 업데이트하여 너비 반영
 
 def sort_treeview_column(tv, col, reverse):
     l = [(tv.set(k, col), k) for k in tv.get_children('')]
@@ -129,10 +128,6 @@ def search_info():
     treeview.update_idletasks()
     adjust_column_widths(treeview)
 
-    for col in treeview["columns"]:
-        col_width = treeview.column(col, option='width')
-        print(f"Final Column Width - {col}: {col_width}")
-
     messagebox.showinfo("검색 완료", f"{len(search_results)}개의 파일을 찾았습니다.")
 
 def clear_results():
@@ -210,7 +205,7 @@ def create_info_tab(tab):
 if __name__ == "__main__":
     root = tk.Tk()
     root.title("파일 정보 검색 및 분석")
-    root.geometry("1152x648")  # 기본 창 크기 설정
+    root.geometry("800x600")  # 기본 창 크기 설정
 
     tab_control = ttk.Notebook(root)
     tab3 = ttk.Frame(tab_control)
