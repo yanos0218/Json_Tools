@@ -12,7 +12,11 @@ def search_in_json_files(directory, selected_type):
     subfields_meeting = ['참여자소속', '참석자소속', '회의주제']
     fields_card = ['카드사명', '카드번호', '카드이용일', '카드매입사', '가맹점번호', '가맹점명', '가맹점업종', '공급액', '부가세', '합계금액']
     fields_travel_report = ['기안일', '문서번호', '출장자 성명', '출장자 소속', '출장자 직위', '출장기간', '출장목적지', '출장목적', '출장내용', '출장결과']
-    
+    fields_immigration = ['문서확인번호', '발급번호', '성명', '주민등록번호', '성별', '국적', '여권번호', '출입국일자', '조회기간', '신청인', '발급일', '발급기관']
+    subfields_immigration = ['출국(Depature)정보1', '입국(Entry)정보1', '출국(Depature)정보2', '입국(Entry)정보2']
+    fields_overtime = ['성명', '초과근무일자', '초과근무시간', '업무내용']
+    subfields_overtime = ['성명', '소속', '직급', '초과근무시간', '초과근무일지', '초과근무시간(부터)', '초과근무시간(까지)', '퇴근시간', '업무내용']
+
     for filename in os.listdir(directory):
         if filename.endswith('.json'):
             file_path = os.path.join(directory, filename)
@@ -20,10 +24,18 @@ def search_in_json_files(directory, selected_type):
             has_pdf = os.path.exists(pdf_path)
             try:
                 with open(file_path, 'r', encoding='utf-8') as file:
-                    content = json.load(file)
+                    try:
+                        content = json.load(file)
+                        if not content:  # JSON 파일이 비어 있는 경우
+                            messagebox.showerror("오류", f"{filename} 파일을 처리하는 중 오류가 발생했습니다: 파일이 비어 있습니다.")
+                            continue
+                    except json.JSONDecodeError:
+                        messagebox.showerror("오류", f"{filename} 파일을 처리하는 중 오류가 발생했습니다: JSON 형식이 올바르지 않습니다.")
+                        continue
+
                     for document in content.get('document', []):
                         docu_type = document.get('docu_type')
-                        if selected_type == '전체' and docu_type not in ['출장신청서', '회의록', '카드매출전표', '출장결과보고서']:
+                        if selected_type == '전체' and docu_type not in ['출장신청서', '회의록', '카드매출전표', '출장결과보고서', '출입국확인서류', '초과근무확인내역서류']:
                             continue
                         if (selected_type == '전체' or docu_type == selected_type):
                             doc_result = {
@@ -71,6 +83,47 @@ def search_in_json_files(directory, selected_type):
                                     if field_content == '':
                                         field_content = 'null'
                                     doc_result[field] = field_content
+                            elif docu_type == '출입국확인서류':
+                                for field in fields_immigration:
+                                    field_content = document.get('contents', {}).get(field, 'empty')
+                                    if isinstance(field_content, dict):
+                                        field_content = field_content.get('content', 'empty')
+                                        if field_content == '':
+                                            field_content = 'null'
+                                        doc_result[field] = field_content
+                                    elif field == '출입국일자' and isinstance(field_content, list):
+                                        items_content = []
+                                        for item in field_content:
+                                            item_result = {}
+                                            for subfield in subfields_immigration:
+                                                subfield_content = item.get(subfield, {}).get('content', 'empty')
+                                                if subfield_content == '':
+                                                    subfield_content = 'null'
+                                                item_result[subfield] = subfield_content
+                                            items_content.append(item_result)
+                                        doc_result[field] = items_content
+                                    else:
+                                        doc_result[field] = 'empty'
+                            elif docu_type == '초과근무확인내역서류':
+                                for field in fields_overtime:
+                                    field_content = document.get('contents', {}).get(field, {}).get('content', 'empty')
+                                    if field_content == '':
+                                        field_content = 'null'
+                                    doc_result[field] = field_content
+                                subfield_content = document.get('contents', {}).get('초과근무자정보', 'empty')
+                                if isinstance(subfield_content, list):
+                                    items_content = []
+                                    for item in subfield_content:
+                                        item_result = {}
+                                        for subfield in subfields_overtime:
+                                            subfield_value = item.get(subfield, {}).get('content', 'empty')
+                                            if subfield_value == '':
+                                                subfield_value = 'null'
+                                            item_result[subfield] = subfield_value
+                                        items_content.append(item_result)
+                                    doc_result['초과근무자정보'] = items_content
+                                else:
+                                    doc_result['초과근무자정보'] = 'empty'
                             results[filename].append(doc_result)
             except Exception as e:
                 messagebox.showerror("오류", f"{filename} 파일을 처리하는 중 오류가 발생했습니다: {e}")
@@ -98,12 +151,17 @@ def display_results(result_list, text_results):
         text_results.insert(tk.END, f"페이지 번호: {result['페이지 번호']}\n", "pagenum")
         for key, value in result.items():
             if key not in ['파일명', '문서 유형', '페이지 번호', 'PDF 경로']:
-                if key == '항목' and isinstance(value, list):
+                if key == '출입국일자' and isinstance(value, list):
+                    text_results.insert(tk.END, f"  {key}:\n", "content")
+                    for item in value:
+                        for subkey, subvalue in item.items():
+                            text_results.insert(tk.END, f"      {subkey}: {subvalue}\n", "subcontent")
+                elif key in ['항목', '초과근무자정보'] and isinstance(value, list):
                     text_results.insert(tk.END, f"  {key}:\n", "content")
                     for item in value:
                         text_results.insert(tk.END, "    - 항목:\n", "content")
                         for subkey, subvalue in item.items():
-                            text_results.insert(tk.END, f"      {subkey}: {subvalue}\n", "content")
+                            text_results.insert(tk.END, f"      {subkey}: {subvalue}\n", "subcontent")
                 else:
                     text_results.insert(tk.END, f"  {key}: {value}\n", "content")
         text_results.insert(tk.END, "\n")
@@ -153,7 +211,7 @@ def create_search_tab(tab):
     label_doc_type = tk.Label(tab, text="문서 유형 선택:")
     label_doc_type.grid(row=1, column=0, padx=10, pady=5, sticky='w')
 
-    combo_doc_type = ttk.Combobox(tab, values=['전체', '출장신청서', '회의록', '카드매출전표', '출장결과보고서'], state='readonly')
+    combo_doc_type = ttk.Combobox(tab, values=sorted(['전체', '출장신청서', '회의록', '카드매출전표', '출장결과보고서', '출입국확인서류', '초과근무확인내역서류']), state='readonly')
     combo_doc_type.current(0)
     combo_doc_type.grid(row=1, column=1, padx=10, pady=5, sticky='w')
 
@@ -187,6 +245,7 @@ def create_search_tab(tab):
     text_results.tag_config("doctype", font=("Helvetica", 10, "bold"), foreground="purple")
     text_results.tag_config("pagenum", font=("Helvetica", 10, "italic"), foreground="green")
     text_results.tag_config("content", font=("Helvetica", 10), foreground="black")
+    text_results.tag_config("subcontent", font=("Helvetica", 10, "italic"), foreground="grey")
 
     tab.grid_rowconfigure(2, weight=1)
     tab.grid_columnconfigure(3, weight=1)
