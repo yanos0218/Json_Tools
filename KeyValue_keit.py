@@ -16,6 +16,18 @@ def search_in_json_files(directory, selected_type):
     subfields_immigration = ['출국(Depature)정보1', '입국(Entry)정보1', '출국(Depature)정보2', '입국(Entry)정보2']
     fields_overtime = ['성명', '초과근무일자', '초과근무시간', '업무내용']
     subfields_overtime = ['성명', '소속', '직급', '초과근무시간', '초과근무일지', '초과근무시간(부터)', '초과근무시간(까지)', '퇴근시간', '업무내용']
+    
+    # 중앙장비심의위원회공문 첫번째 종류
+    fields_equip_committee_1 = ['과제정보', '장비정보', '심의결과']
+    subfields_equip_committee_1_task_info = ['관리전담기관', '과제번호', '사업명', '주관기관', '총괄책임자', '참여기관', '총사업기간', '당해년도사업기간']
+    subfields_equip_committee_1_equip_info = ['심의번호', '도입예상가격', '장비명', '심의신청기관']
+    subfields_equip_committee_1_review_result = ['심의일자', '심의결과', '종합의견 및 검토의견']
+    
+    # 중앙장비심의위원회공문 두번째 종류
+    fields_equip_committee_2 = ['심의일자', '심의번호', '심의항목', '요청내용(백만원)', '최종결과(백만원)']
+    subfields_equip_committee_2_item = ['순번', '심의시설장비', '시설장비명', '담당부처', '세부사업', '내역사업', '과제명', '유형', '단가', '수량', '총금액']
+    subfields_equip_committee_2_request = ['년도', '정부예산요구액', '자체부담금(요청)', '합계(요청내용)']
+    subfields_equip_committee_2_result = ['심의결과', '정부예산인정', '자체부담금(최종)', '합계(최종결과)', '정부예산삭감']
 
     for filename in os.listdir(directory):
         if filename.endswith('.json'):
@@ -35,7 +47,7 @@ def search_in_json_files(directory, selected_type):
 
                     for document in content.get('document', []):
                         docu_type = document.get('docu_type')
-                        if selected_type == '전체' and docu_type not in ['출장신청서', '회의록', '카드매출전표', '출장결과보고서', '출입국확인서류', '초과근무확인내역서류']:
+                        if selected_type == '전체' and docu_type not in ['출장신청서', '회의록', '카드매출전표', '출장결과보고서', '출입국확인서류', '초과근무확인내역서류', '중앙장비심의위원회공문']:
                             continue
                         if (selected_type == '전체' or docu_type == selected_type):
                             doc_result = {
@@ -124,6 +136,63 @@ def search_in_json_files(directory, selected_type):
                                     doc_result['초과근무자정보'] = items_content
                                 else:
                                     doc_result['초과근무자정보'] = 'empty'
+                            elif docu_type == '중앙장비심의위원회공문':
+                                first_field = list(document.get('contents', {}).keys())[0] if document.get('contents', {}) else ''
+                                if first_field == '과제정보':
+                                    for field in fields_equip_committee_1:
+                                        field_content = document.get('contents', {}).get(field, 'empty')
+                                        if isinstance(field_content, list):
+                                            items_content = []
+                                            subfields = []
+                                            if field == '과제정보':
+                                                subfields = subfields_equip_committee_1_task_info
+                                            elif field == '장비정보':
+                                                subfields = subfields_equip_committee_1_equip_info
+                                            elif field == '심의결과':
+                                                subfields = subfields_equip_committee_1_review_result
+                                            
+                                            for item in field_content:
+                                                item_result = {}
+                                                for subfield in subfields:
+                                                    subfield_content = item.get(subfield, {}).get('content', 'empty')
+                                                    if subfield_content == '':
+                                                        subfield_content = 'null'
+                                                    item_result[subfield] = subfield_content
+                                                items_content.append(item_result)
+                                            doc_result[field] = items_content
+                                        else:
+                                            doc_result[field] = 'empty'
+                                elif first_field == '심의일자':
+                                    for field in fields_equip_committee_2:
+                                        field_content = document.get('contents', {}).get(field, 'empty')
+                                        if isinstance(field_content, list):
+                                            items_content = []
+                                            subfields = []
+                                            if field == '심의항목':
+                                                subfields = subfields_equip_committee_2_item
+                                            elif field == '요청내용(백만원)':
+                                                subfields = subfields_equip_committee_2_request
+                                            elif field == '최종결과(백만원)':
+                                                subfields = subfields_equip_committee_2_result
+                                            
+                                            for item in field_content:
+                                                item_result = {}
+                                                for subfield in subfields:
+                                                    subfield_content = item.get(subfield, {}).get('content', 'empty')
+                                                    if subfield_content == '':
+                                                        subfield_content = 'null'
+                                                    item_result[subfield] = subfield_content
+                                                items_content.append(item_result)
+                                            # 정렬 추가
+                                            if field == '심의항목':
+                                                items_content.sort(key=lambda x: int(x.get('순번', 0)))
+                                            elif field == '요청내용(백만원)':
+                                                items_content.sort(key=lambda x: x.get('년도', ''))
+                                            elif field == '최종결과(백만원)':
+                                                items_content.sort(key=lambda x: x.get('심의결과', ''))
+                                            doc_result[field] = items_content
+                                        else:
+                                            doc_result[field] = 'empty'
                             results[filename].append(doc_result)
             except Exception as e:
                 messagebox.showerror("오류", f"{filename} 파일을 처리하는 중 오류가 발생했습니다: {e}")
@@ -151,12 +220,12 @@ def display_results(result_list, text_results):
         text_results.insert(tk.END, f"페이지 번호: {result['페이지 번호']}\n", "pagenum")
         for key, value in result.items():
             if key not in ['파일명', '문서 유형', '페이지 번호', 'PDF 경로']:
-                if key == '출입국일자' and isinstance(value, list):
+                if key in ['출입국일자', '과제정보', '장비정보', '심의결과', '심의항목', '요청내용(백만원)', '최종결과(백만원)'] and isinstance(value, list):
                     text_results.insert(tk.END, f"  {key}:\n", "content")
                     for item in value:
                         for subkey, subvalue in item.items():
                             text_results.insert(tk.END, f"      {subkey}: {subvalue}\n", "subcontent")
-                elif key in ['항목', '초과근무자정보'] and isinstance(value, list):
+                elif key in ['항목', '초과근무자정보', '과제정보', '장비정보', '심의결과', '심의항목', '요청내용(백만원)', '최종결과(백만원)'] and isinstance(value, list):
                     text_results.insert(tk.END, f"  {key}:\n", "content")
                     for item in value:
                         text_results.insert(tk.END, "    - 항목:\n", "content")
@@ -211,7 +280,7 @@ def create_search_tab(tab):
     label_doc_type = tk.Label(tab, text="문서 유형 선택:")
     label_doc_type.grid(row=1, column=0, padx=10, pady=5, sticky='w')
 
-    combo_doc_type = ttk.Combobox(tab, values=sorted(['전체', '출장신청서', '회의록', '카드매출전표', '출장결과보고서', '출입국확인서류', '초과근무확인내역서류']), state='readonly')
+    combo_doc_type = ttk.Combobox(tab, values=sorted(['전체', '출장신청서', '회의록', '카드매출전표', '출장결과보고서', '출입국확인서류', '초과근무확인내역서류', '중앙장비심의위원회공문']), state='readonly')
     combo_doc_type.current(0)
     combo_doc_type.grid(row=1, column=1, padx=10, pady=5, sticky='w')
 
