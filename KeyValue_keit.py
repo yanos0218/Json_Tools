@@ -19,7 +19,7 @@ def search_in_json_files(directory, selected_type):
     
     # 중앙장비심의위원회공문 첫번째 종류
     fields_equip_committee_1 = ['과제정보', '장비정보', '심의결과']
-    subfields_equip_committee_1_task_info = ['관리전담기관', '과제번호', '사업명', '주관기관', '총괄책임자', '참여기관', '총사업기간', '당해년도사업기간']
+    subfields_equip_committee_1_task_info = ['관리전담기관', '과제번호', '사업명', '과제명', '주관기관', '총괄책임자', '참여기관', '총사업기간', '당해년도사업기간']
     subfields_equip_committee_1_equip_info = ['심의번호', '도입예상가격', '장비명', '심의신청기관']
     subfields_equip_committee_1_review_result = ['심의일자', '심의결과', '종합의견 및 검토의견']
     
