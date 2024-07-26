@@ -64,6 +64,17 @@ documents_structure = {
 def sort_items(items, key):
     return sorted(items, key=lambda x: x.get(key, ''))
 
+# 특정 필드의 내용을 추출하는 함수
+def get_field_content(document, field):
+    field_content = document.get('contents', {}).get(field, 'empty')
+    if isinstance(field_content, dict):
+        field_content = field_content.get('content', 'empty')
+    if isinstance(field_content, list):
+        field_content = [item.get('content', 'empty') for item in field_content]
+    if field_content == '':
+        field_content = 'null'
+    return field_content
+
 # 문서 처리 함수
 def process_document(document, doc_index):
     doc_info = documents_structure.get(doc_index, {})
@@ -207,12 +218,7 @@ def display_results(result_list, text_results):
     for result in result_list:
         if result['파일명'] != current_filename:
             current_filename = result['파일명']
-            if result['PDF 경로']:  # PDF 경로가 있는 경우에만 하이퍼링크 추가
-                pdf_path = result['PDF 경로'].replace('/', '\\')  # 백슬래시로 변환
-                text_results.insert(tk.END, f"파일명: {result['파일명']}\n", ("hyperlink_filename", pdf_path))
-                text_results.tag_bind("hyperlink_filename", "<Button-1>", lambda e, path=pdf_path: open_pdf(path))
-            else:
-                text_results.insert(tk.END, f"파일명: {result['파일명']}\n", "filename")
+            text_results.insert(tk.END, f"파일명: {result['파일명']}\n", "filename")
         
         text_results.insert(tk.END, f"문서 유형: {result['문서 유형']}\n", "doctype")
         text_results.insert(tk.END, f"페이지 번호: {result['페이지 번호']}\n", "pagenum")
@@ -231,6 +237,7 @@ def display_results(result_list, text_results):
                             text_results.insert(tk.END, f"      {subkey}: {subvalue}\n", "subcontent")
                 else:
                     text_results.insert(tk.END, f"  {key}: {value}\n", "content")
+        
         text_results.insert(tk.END, "\n")
 
 # 리스트박스에서 파일 선택 이벤트 처리 함수
