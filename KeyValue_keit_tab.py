@@ -269,7 +269,7 @@ def open_pdf(path):
     webbrowser.open(path)
 
 # 검색 탭을 생성하는 함수
-def create_search_tab(tab):
+def create_KeyValue_keit_tab(tab):
     label_directory = tk.Label(tab, text="폴더 선택:")
     label_directory.grid(row=0, column=0, padx=10, pady=5, sticky='w')
 
@@ -331,6 +331,6 @@ if __name__ == "__main__":
     tab_control.add(tab, text='JSON 파일 검색')
     tab_control.pack(expand=1, fill='both')
 
-    create_search_tab(tab)
+    create_KeyValue_keit_tab(tab5)
 
     root.mainloop()
