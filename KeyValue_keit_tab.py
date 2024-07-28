@@ -327,8 +327,8 @@ if __name__ == "__main__":
     root.title("JSON 파일 검색")
 
     tab_control = ttk.Notebook(root)
-    tab = ttk.Frame(tab_control)
-    tab_control.add(tab, text='JSON 파일 검색')
+    tab5 = ttk.Frame(tab_control)
+    tab_control.add(tab5, text='JSON 파일 검색')
     tab_control.pack(expand=1, fill='both')
 
     create_KeyValue_keit_tab(tab5)
