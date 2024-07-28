@@ -4,6 +4,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import webbrowser
 from collections import defaultdict
+import concurrent.futures  # 추가: 병렬 처리를 위한 모듈 임포트
+import gc  # 가비지 컬렉션 모듈 임포트
 
 # 항목 정보 관리
 documents_structure = {
@@ -64,6 +66,46 @@ documents_structure = {
 def sort_items(items, key):
     return sorted(items, key=lambda x: x.get(key, ''))
 
+# 특정 필드의 내용을 추출하는 함수
+def get_field_content(field_content):
+    if isinstance(field_content, dict):
+        content = field_content.get('content', 'empty')
+        return 'null' if not content.strip() else content
+    elif isinstance(field_content, list):
+        return ['null' if not item.get('content', 'empty').strip() else item.get('content', 'empty') for item in field_content]
+    elif isinstance(field_content, str):
+        return 'null' if not field_content.strip() else field_content
+    return 'null' if field_content == '' else field_content
+
+
+# 중앙장비심의위원회공문의 field_2 항목을 처리하는 함수
+def process_central_equipment_committee(document, fields, subfields):
+    result = {}
+    for field in fields:
+        field_content = document.get('contents', {}).get(field, 'empty')
+        if isinstance(field_content, dict):
+            # dict 타입의 content만 추출
+            field_content = field_content.get('content', 'empty')
+        elif isinstance(field_content, list):
+            items_content = []
+            for item in field_content:
+                item_result = {}
+                for subfield in subfields.get(field, []):
+                    subfield_content = item.get(subfield, {}).get('content', 'empty')
+                    if subfield_content == '':
+                        subfield_content = 'null'
+                    item_result[subfield] = subfield_content
+                items_content.append(item_result)
+            if field == '심의항목':
+                items_content = sort_items(items_content, '순번')
+            elif field == '요청내용(백만원)':
+                items_content = sort_items(items_content, '년도')
+            elif field == '최종결과(백만원)':
+                items_content = sort_items(items_content, '심의결과')
+            field_content = items_content
+        result[field] = field_content
+    return result
+
 # 문서 처리 함수
 def process_document(document, doc_index):
     doc_info = documents_structure.get(doc_index, {})
@@ -74,120 +116,109 @@ def process_document(document, doc_index):
     # 중앙장비심의위원회공문의 경우 첫 번째 필드로 구분
     if doc_info.get("Title") == "중앙장비심의위원회공문":
         first_field = list(document.get('contents', {}).keys())[0] if document.get('contents', {}) else ''
-        if first_field in ['과제정보', '심의일자']:
-            fields = doc_info["fields"]["field_1"] if first_field == '과제정보' else doc_info["fields"]["field_2"]
-
-    for field in fields:
-        field_content = document.get('contents', {}).get(field, 'empty')
-        if isinstance(field_content, dict):
-            field_content = field_content.get('content', 'empty')
-        if isinstance(field_content, list):
-            field_content = [item.get('content', 'empty') for item in field_content]
-        if field_content == '':
-            field_content = 'null'
-        result[field] = field_content
-
-    # 예외 처리
-    if doc_info.get("Title") == "회의록":
-        result['항목'] = []
-        for item in document.get('contents', {}).get('항목', []):
-            item_result = {}
-            for subfield in subfields.get('항목', []):
-                subfield_content = item.get(subfield, {}).get('content', 'empty')
-                if subfield_content == '':
-                    subfield_content = 'null'
-                item_result[subfield] = subfield_content
-            result['항목'].append(item_result)
-
-    elif doc_info.get("Title") == "출입국확인서류":
-        result['출입국일자'] = []
-        for item in document.get('contents', {}).get('출입국일자', []):
-            item_result = {}
-            for subfield in subfields.get('출입국일자', []):
-                subfield_content = item.get(subfield, {}).get('content', 'empty')
-                if subfield_content == '':
-                    subfield_content = 'null'
-                item_result[subfield] = subfield_content
-            result['출입국일자'].append(item_result)
-
-    elif doc_info.get("Title") == "초과근무확인내역서류":
-        for field in fields:
-            field_content = document.get('contents', {}).get(field, {}).get('content', 'empty')
-            if field_content == '':
-                field_content = 'null'
-            result[field] = field_content
-        subfield_content = document.get('contents', {}).get('초과근무자정보', 'empty')
-        if isinstance(subfield_content, list):
-            items_content = []
-            for item in subfield_content:
-                item_result = {}
-                for subfield in subfields.get('초과근무자정보', []):
-                    subfield_value = item.get(subfield, {}).get('content', 'empty')
-                    if subfield_value == '':
-                        subfield_value = 'null'
-                    item_result[subfield] = subfield_value
-                items_content.append(item_result)
-            result['초과근무자정보'] = items_content
-        else:
-            result['초과근무자정보'] = 'empty'
-
-    elif doc_info.get("Title") == "중앙장비심의위원회공문":
-        first_field = list(document.get('contents', {}).keys())[0] if document.get('contents', {}) else ''
+        fields = doc_info["fields"]["field_1"] if first_field == '과제정보' else doc_info["fields"]["field_2"]
+        return process_central_equipment_committee(document, fields, subfields)
+    else:
         for field in fields:
             field_content = document.get('contents', {}).get(field, 'empty')
-            if isinstance(field_content, list):
+            result[field] = get_field_content(field_content)
+
+        # 예외 처리
+        if doc_info.get("Title") == "회의록":
+            result['항목'] = []
+            for item in document.get('contents', {}).get('항목', []):
+                item_result = {}
+                for subfield in subfields.get('항목', []):
+                    subfield_content = item.get(subfield, {}).get('content', 'empty')
+                    if subfield_content == '' or subfield_content.isspace():
+                        subfield_content = 'null'
+                    item_result[subfield] = subfield_content
+                result['항목'].append(item_result)
+            if not result['항목']:
+                result['항목'] = 'empty'
+
+        elif doc_info.get("Title") == "출입국확인서류":
+            result['출입국일자'] = []
+            for item in document.get('contents', {}).get('출입국일자', []):
+                item_result = {}
+                for subfield in subfields.get('출입국일자', []):
+                    subfield_content = item.get(subfield, {}).get('content', 'empty')
+                    if subfield_content == '' or subfield_content.isspace():
+                        subfield_content = 'null'
+                    item_result[subfield] = subfield_content
+                result['출입국일자'].append(item_result)
+            if not result['출입국일자']:
+                result['출입국일자'] = 'empty'
+
+        elif doc_info.get("Title") == "초과근무확인내역서류":
+            for field in fields:
+                field_content = document.get('contents', {}).get(field, {}).get('content', 'empty')
+                if field_content == '' or field_content.isspace():
+                    field_content = 'null'
+                result[field] = field_content
+            subfield_content = document.get('contents', {}).get('초과근무자정보', 'empty')
+            if isinstance(subfield_content, list):
                 items_content = []
-                for item in field_content:
+                for item in subfield_content:
                     item_result = {}
-                    for subfield in subfields.get(first_field, []):
-                        subfield_content = item.get(subfield, {}).get('content', 'empty')
-                        if subfield_content == '':
-                            subfield_content = 'null'
-                        item_result[subfield] = subfield_content
+                    for subfield in subfields.get('초과근무자정보', []):
+                        subfield_value = item.get(subfield, {}).get('content', 'empty')
+                        if subfield_value == '' or subfield_value.isspace():
+                            subfield_value = 'null'
+                        item_result[subfield] = subfield_value
                     items_content.append(item_result)
-                if field == '심의항목':
-                    items_content = sort_items(items_content, '순번')
-                elif field == '요청내용(백만원)':
-                    items_content = sort_items(items_content, '년도')
-                elif field == '최종결과(백만원)':
-                    items_content = sort_items(items_content, '심의결과')
-                result[field] = items_content
+                result['초과근무자정보'] = items_content
             else:
-                result[field] = 'empty'
+                result['초과근무자정보'] = 'empty'
 
     return result
 
 # JSON 파일에서 검색하는 함수
 def search_in_json_files(directory, selected_type):
     results = defaultdict(list)
-    for filename in os.listdir(directory):
-        if filename.endswith('.json'):
-            file_path = os.path.join(directory, filename)
-            pdf_path = os.path.join(directory, os.path.splitext(filename)[0] + '.pdf')
-            has_pdf = os.path.exists(pdf_path)
-            try:
-                with open(file_path, 'r', encoding='utf-8') as file:
-                    content = json.load(file)
-                    if not content:
-                        messagebox.showerror("오류", f"{filename} 파일을 처리하는 중 오류가 발생했습니다: 파일이 비어 있습니다.")
-                        continue
+    json_files = [os.path.join(directory, filename) for filename in os.listdir(directory) if filename.endswith('.json')]
 
-                    for document in content.get('document', []):
-                        docu_type = document.get('docu_type')
-                        if selected_type == '전체' or docu_type == selected_type:
-                            for doc_index, doc_info in documents_structure.items():
-                                if docu_type == doc_info["Title"]:
-                                    doc_result = process_document(document, doc_index)
-                                    doc_result.update({
-                                        '파일명': filename,
-                                        '페이지 번호': document.get('page_num'),
-                                        '문서 유형': docu_type,
-                                        'PDF 경로': pdf_path if has_pdf else None
-                                    })
-                                    results[filename].append(doc_result)
-            except Exception as e:
-                messagebox.showerror("오류", f"{filename} 파일을 처리하는 중 오류가 발생했습니다: {e}")
-    
+    # 파일을 병렬로 처리하기 위해 파일 리스트를 생성합니다.
+    def process_file(file_path):
+        filename = os.path.basename(file_path)
+        pdf_path = os.path.join(directory, os.path.splitext(filename)[0] + '.pdf')
+        has_pdf = os.path.exists(pdf_path)
+        file_results = []
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                content = json.load(file)
+                if not content:
+                    messagebox.showerror("오류", f"{filename} 파일을 처리하는 중 오류가 발생했습니다: 파일이 비어 있습니다.")
+                    return []
+
+                for document in content.get('document', []):
+                    docu_type = document.get('docu_type')
+                    if selected_type == '전체' or docu_type == selected_type:
+                        for doc_index, doc_info in documents_structure.items():
+                            if docu_type == doc_info["Title"]:
+                                doc_result = process_document(document, doc_index)
+                                doc_result.update({
+                                    '파일명': filename,
+                                    '페이지 번호': document.get('page_num'),
+                                    '문서 유형': docu_type,
+                                    'PDF 경로': pdf_path if has_pdf else None
+                                })
+                                file_results.append(doc_result)
+            # 처리 후 메모리 해제
+            del content
+            gc.collect()
+        except Exception as e:
+            messagebox.showerror("오류", f"{filename} 파일을 처리하는 중 오류가 발생했습니다: {e}")
+        return file_results
+
+    # 병렬 처리 실행
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future_to_file = {executor.submit(process_file, file): file for file in json_files}
+        for future in concurrent.futures.as_completed(future_to_file):
+            file_results = future.result()
+            if file_results:
+                results[os.path.basename(future_to_file[future])] = file_results
+
     return results
 
 # 디렉토리 선택 함수
@@ -207,8 +238,9 @@ def display_results(result_list, text_results):
     for result in result_list:
         if result['파일명'] != current_filename:
             current_filename = result['파일명']
-            if result['PDF 경로']:  # PDF 경로가 있는 경우에만 하이퍼링크 추가
-                pdf_path = result['PDF 경로'].replace('/', '\\')  # 백슬래시로 변환
+            # PDF 경로가 있는 경우에만 하이퍼링크 추가 (PDF 경로 하이퍼링크 기능 추가 부분)
+            if result['PDF 경로']:
+                pdf_path = result['PDF 경로'].replace('/', '\\')  # 경로 구분자 수정
                 text_results.insert(tk.END, f"파일명: {result['파일명']}\n", ("hyperlink_filename", pdf_path))
                 text_results.tag_bind("hyperlink_filename", "<Button-1>", lambda e, path=pdf_path: open_pdf(path))
             else:
