@@ -35,9 +35,9 @@
   - pyinstaller --onefile --windowed main_ui.py --version-file file_version_info.txt
 
 **release**
-- v1.0.0.2
-# KeyValue_keit_tab 기능 추가
+v1.0.0.2
+- KeyValue_keit_tab 기능 추가
 
-- v1.0.0.1
-# file_tab, count_tab, FileInfo_tab 기능 추가
-# File Version 관리
+v1.0.0.1
+- file_tab, count_tab, FileInfo_tab 기능 추가
+- File Version 관리
