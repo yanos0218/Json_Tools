@@ -21,7 +21,23 @@
 - file_version_info.txt
   - File 속성 정보
   - 제품 전체 중 일부 File의 Code가 변경된 경우 버전은 수정됨
+- KeyValue_keit_tab
+  - KEIT 전용 Tab 생성
+  - 기능
+   > 문서 유형 별 검색
+   >> 출장신청서, 회의록, 카드매출전표, 출장결과보고서, 출입국확인서류, 초과근무확인내역서류, 중앙장비심의위원회공문, 연구참여확약서, 수입세금계산서, 국가연구시설장비등록증&산업기술개발장비등록증, 교육수료증, 과제참여계약서, 건강보험자격득실확인서, 전자세금계산서, 수입신고내역서
+   > PDF 및 원본 보기 기능
+   > 삭제 기능
+   >> 삭제 시 json 파일만 있는 경우 json만 삭제하고 pdf가 같이 있음 pdf와 함께 삭제
 
 **etc**
 - '.exe' 생성 명령어
   - pyinstaller --onefile --windowed main_ui.py --version-file file_version_info.txt
+
+**release**
+- v1.0.0.2
+# KeyValue_keit_tab 기능 추가
+
+- v1.0.0.1
+# file_tab, count_tab, FileInfo_tab 기능 추가
+# File Version 관리
