@@ -9,6 +9,7 @@ from KeyValue_keit_tab import create_KeyValue_keit_tab
 def main():
     root = tk.Tk()
     root.title("파일 검색 및 분석")
+    root.geometry("800x600")  # Set the window size to 800x600
 
     tab_control = ttk.Notebook(root)
     tab1 = ttk.Frame(tab_control)

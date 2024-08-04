@@ -1,15 +1,11 @@
 import json
 import os
-import logging
 from collections import defaultdict
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import webbrowser
 import concurrent.futures
 import gc
-
-# 로그 설정
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # 항목 정보 관리
 documents_structure = {
@@ -66,6 +62,14 @@ documents_structure = {
             '요청내용(백만원)': ['년도', '정부예산요구액', '자체부담금(요청)', '합계(요청내용)'],
             '최종결과(백만원)': ['심의결과', '정부예산인정', '자체부담금(최종)', '합계(최종결과)', '정부예산삭감']
         }
+    },
+    "documents_8": {
+        "Title": "연구참여확약서",
+        "fields": ['학생연구자 인적사항', '연구참여자정보', '계약일', '연구책임자(성명)', '연구책임자(소속)', '연구책임자(직급)', '연구책임자(연락처)', '연구책임자(이메일)', '연구과제명', '연구지원기관명', '연구기간', '계약기관'],
+        "subfields": {
+            "학생연구자 인적사항": ['성명', '학번', '생년월일', '소속(학과명)', '과정', '과학기술(국가연구)인번호', '주소', '연락처', '이메일'],
+            "연구참여자정보": ['참여기간', '참여과제명', '담당업무', '참여율', '학생인건비지급액', '학생인건비지급일', '지급방법', '계정책임자(성명)', '계정책임자(소속)', '계정책임자(직급)', '계정책임자(연락처)', '계정책임자(이메일)']
+        }
     }
 }
 
@@ -84,24 +88,25 @@ def get_field_content(field_content):
         return 'null' if not field_content.strip() else field_content
     return 'null' if field_content == '' else field_content
 
+# 하위 필드 콘텐츠 추출 함수
+def extract_subfield_content(item, subfields):
+    item_result = {}
+    for subfield in subfields:
+        subfield_content = item.get(subfield, {}).get('content', 'empty')
+        if subfield_content == '' or subfield_content.isspace():
+            subfield_content = 'null'
+        item_result[subfield] = subfield_content
+    return item_result
+
 # 중앙장비심의위원회공문의 field_2 항목을 처리하는 함수
 def process_central_equipment_committee(document, fields, subfields):
     result = {}
     for field in fields:
         field_content = document.get('contents', {}).get(field, 'empty')
         if isinstance(field_content, dict):
-            # dict 타입의 content만 추출
             field_content = field_content.get('content', 'empty')
         elif isinstance(field_content, list):
-            items_content = []
-            for item in field_content:
-                item_result = {}
-                for subfield in subfields.get(field, []):
-                    subfield_content = item.get(subfield, {}).get('content', 'empty')
-                    if subfield_content == '' or subfield_content.isspace():
-                        subfield_content = 'null'
-                    item_result[subfield] = subfield_content
-                items_content.append(item_result)
+            items_content = [extract_subfield_content(item, subfields.get(field, [])) for item in field_content]
             if field == '심의항목':
                 items_content = sort_items(items_content, '순번')
             elif field == '요청내용(백만원)':
@@ -116,34 +121,20 @@ def process_central_equipment_committee(document, fields, subfields):
 def process_overtime_document(document, fields, subfields):
     result = {}
     first_field = list(document.get('contents', {}).keys())[0] if document.get('contents', {}) else ''
-    print(f"First field detected: {first_field}")
 
     fields_to_process = fields["field_1"] if first_field in fields["field_1"] else fields["field_2"]
-    print(f"Fields to process: {fields_to_process}")
-    
+
     if fields_to_process == fields["field_1"]:
-        print("Processing field_1")
         for field in fields_to_process:
             field_content = document.get('contents', {}).get(field, 'empty')
             result[field] = get_field_content(field_content)
-            print(f"Processed field: {field}")
     else:
-        print("Processing field_2 (초과근무자정보)")
         items_content = []
         for page in document.get('document', []):
             if 'contents' in page and '초과근무자정보' in page['contents']:
                 for item in page['contents']['초과근무자정보']:
-                    item_result = {}
-                    for subfield in subfields.get('초과근무자정보', []):
-                        subfield_content = item.get(subfield, 'empty')
-                        if isinstance(subfield_content, dict):
-                            subfield_content = subfield_content.get('content', 'empty')
-                        print(f"Subfield: {subfield}, Content: {subfield_content}")  # 디버그 메시지 추가
-                        if subfield_content == '' or subfield_content.isspace():
-                            subfield_content = 'null'
-                        item_result[subfield] = subfield_content
+                    item_result = extract_subfield_content(item, subfields.get('초과근무자정보', []))
                     items_content.append(item_result)
-        print(f"Collected items: {items_content}")  # 디버그 메시지 추가
         result['초과근무자정보'] = items_content if items_content else 'empty'
     
     return result
@@ -160,6 +151,20 @@ def process_document(document, doc_index):
         first_field = list(document.get('contents', {}).keys())[0] if document.get('contents', {}) else ''
         fields = doc_info["fields"]["field_1"] if first_field == '과제정보' else doc_info["fields"]["field_2"]
         return process_central_equipment_committee(document, fields, subfields)
+    
+    elif doc_info.get("Title") == "초과근무확인내역서류":
+        first_field = list(document.get('contents', {}).keys())[0] if document.get('contents', {}) else ''
+        fields_to_process = fields["field_1"] if first_field in fields["field_1"] else fields["field_2"]
+
+        for field in fields_to_process:
+            field_content = document.get('contents', {}).get(field, 'empty')
+            if isinstance(field_content, dict):
+                field_content = field_content.get('content', 'empty')
+            elif isinstance(field_content, list):
+                items_content = [extract_subfield_content(item, subfields.get(field, [])) for item in field_content]
+                field_content = items_content
+            result[field] = field_content
+
     else:
         for field in fields:
             field_content = document.get('contents', {}).get(field, 'empty')
@@ -169,12 +174,7 @@ def process_document(document, doc_index):
         if doc_info.get("Title") == "회의록":
             result['항목'] = []
             for item in document.get('contents', {}).get('항목', []):
-                item_result = {}
-                for subfield in subfields.get('항목', []):
-                    subfield_content = item.get(subfield, {}).get('content', 'empty')
-                    if subfield_content == '' or subfield_content.isspace():
-                        subfield_content = 'null'
-                    item_result[subfield] = subfield_content
+                item_result = extract_subfield_content(item, subfields.get('항목', []))
                 result['항목'].append(item_result)
             if not result['항목']:
                 result['항목'] = 'empty'
@@ -182,37 +182,10 @@ def process_document(document, doc_index):
         elif doc_info.get("Title") == "출입국확인서류":
             result['출입국일자'] = []
             for item in document.get('contents', {}).get('출입국일자', []):
-                item_result = {}
-                for subfield in subfields.get('출입국일자', []):
-                    subfield_content = item.get(subfield, {}).get('content', 'empty')
-                    if subfield_content == '' or subfield_content.isspace():
-                        subfield_content = 'null'
-                    item_result[subfield] = subfield_content
+                item_result = extract_subfield_content(item, subfields.get('출입국일자', []))
                 result['출입국일자'].append(item_result)
             if not result['출입국일자']:
                 result['출입국일자'] = 'empty'
-
-        elif doc_info.get("Title") == "초과근무확인내역서류":
-            first_field = list(document.get('contents', {}).keys())[0] if document.get('contents', {}) else ''
-            fields = doc_info["fields"]["field_1"] if first_field == '성명' else doc_info["fields"]["field_2"]
-
-            for field in fields:
-                field_content = document.get('contents', {}).get(field, 'empty')
-                if isinstance(field_content, dict):
-                    # dict 타입의 content만 추출
-                    field_content = field_content.get('content', 'empty')
-                elif isinstance(field_content, list):
-                    items_content = []
-                    for item in field_content:
-                        item_result = {}
-                        for subfield in subfields.get(field, []):
-                            subfield_content = item.get(subfield, {}).get('content', 'empty')
-                            if subfield_content == '' or subfield_content.isspace():
-                                subfield_content = 'null'
-                            item_result[subfield] = subfield_content
-                        items_content.append(item_result)
-                    field_content = items_content
-                result[field] = field_content
 
     return result
 
@@ -238,7 +211,6 @@ def search_in_json_files(directory, selected_type):
                     if selected_type == '전체' or docu_type == selected_type:
                         for doc_index, doc_info in documents_structure.items():
                             if docu_type == doc_info["Title"]:
-                                print(f"Processing document: {docu_type} in file: {filename}")
                                 doc_result = process_document(document, doc_index)
                                 doc_result.update({
                                     '파일명': filename,
@@ -250,6 +222,10 @@ def search_in_json_files(directory, selected_type):
             # 처리 후 메모리 해제
             del content
             gc.collect()
+        except json.JSONDecodeError as e:
+            messagebox.showerror("오류", f"{filename} 파일을 처리하는 중 JSON 오류가 발생했습니다: {e}")
+        except FileNotFoundError as e:
+            messagebox.showerror("오류", f"{filename} 파일을 찾을 수 없습니다: {e}")
         except Exception as e:
             messagebox.showerror("오류", f"{filename} 파일을 처리하는 중 오류가 발생했습니다: {e}")
         return file_results
@@ -281,9 +257,7 @@ def display_results(result_list, text_results):
         if result['파일명'] != current_filename:
             current_filename = result['파일명']
             if result['PDF 경로']:
-                pdf_path = result['PDF 경로'].replace('/', '\\')
-                text_results.insert(tk.END, f"파일명: {result['파일명']}\n", ("hyperlink_filename", pdf_path))
-                text_results.tag_bind("hyperlink_filename", "<Button-1>", lambda e, path=pdf_path: open_pdf(path))
+                text_results.insert(tk.END, f"파일명: {result['파일명']}\n", "pdf_filename")
             else:
                 text_results.insert(tk.END, f"파일명: {result['파일명']}\n", "filename")
         
@@ -327,15 +301,55 @@ def search_pattern(entry_directory, combo_doc_type, text_results, file_listbox):
     file_listbox.delete(0, tk.END)
     unique_files = {os.path.splitext(filename)[0]: res_list for filename, res_list in results.items()}
     
-    for filename in unique_files.keys():
+    sorted_files = sorted(unique_files.keys())  # 오름차순 정렬
+    for filename in sorted_files:
         file_listbox.insert(tk.END, filename)
     file_listbox.bind("<<ListboxSelect>>", lambda e: on_file_select(e, unique_files, text_results))
     
     if not unique_files:
         display_results([], text_results)
     else:
-        first_file = next(iter(unique_files))
-        display_results(unique_files[first_file], text_results)
+        first_file = sorted_files[0]
+        display_results(unique_files[first_file], text_results)  # 첫 번째 파일의 내용을 표시
+
+# 파일 삭제 함수
+def delete_selected_file(file_listbox, text_results, entry_directory):
+    selected_index = file_listbox.curselection()
+    if not selected_index:
+        messagebox.showwarning("경고", "삭제할 파일을 선택하세요.")
+        return
+    
+    selected_file = file_listbox.get(selected_index[0])
+    file_path = os.path.join(entry_directory.get(), selected_file + '.json')
+    pdf_path = os.path.join(entry_directory.get(), selected_file + '.pdf')
+    
+    # 삭제 확인 메시지
+    confirm = messagebox.askyesno("확인", f"{selected_file}.json 파일을 삭제하시겠습니까?")
+    if confirm:
+        try:
+            os.remove(file_path)
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+            messagebox.showinfo("정보", f"{selected_file}.json 파일이 삭제되었습니다.")
+            file_listbox.delete(selected_index)
+            text_results.delete(1.0, tk.END)
+        except Exception as e:
+            messagebox.showerror("오류", f"파일 삭제 중 오류가 발생했습니다: {e}")
+
+# PDF 보기 함수
+def view_pdf(file_listbox, entry_directory):
+    selected_index = file_listbox.curselection()
+    if not selected_index:
+        messagebox.showwarning("경고", "PDF를 볼 파일을 선택하세요.")
+        return
+    
+    selected_file = file_listbox.get(selected_index[0])
+    pdf_path = os.path.join(entry_directory.get(), selected_file + '.pdf')
+    
+    if os.path.exists(pdf_path):
+        webbrowser.open(pdf_path)
+    else:
+        messagebox.showerror("오류", f"{selected_file}.pdf 파일을 찾을 수 없습니다.")
 
 # PDF 파일을 기본 웹 브라우저에서 여는 함수
 def open_pdf(path):
@@ -355,15 +369,23 @@ def create_KeyValue_keit_tab(tab):
     label_doc_type = tk.Label(tab, text="문서 유형 선택:")
     label_doc_type.grid(row=1, column=0, padx=10, pady=5, sticky='w')
 
-    combo_doc_type = ttk.Combobox(tab, values=sorted(['전체', '출장신청서', '회의록', '카드매출전표', '출장결과보고서', '출입국확인서류', '초과근무확인내역서류', '중앙장비심의위원회공문']), state='readonly')
+    # "전체" 항목을 상위에 두고, 나머지 항목은 오름차순으로 정렬
+    doc_types = ['전체'] + sorted([info['Title'] for key, info in documents_structure.items()])
+    combo_doc_type = ttk.Combobox(tab, values=doc_types, state='readonly')
     combo_doc_type.current(0)
     combo_doc_type.grid(row=1, column=1, padx=10, pady=5, sticky='w')
 
+    button_delete = tk.Button(tab, text="삭제하기", command=lambda: delete_selected_file(file_listbox, text_results, entry_directory), width=20, bg='red', fg='white')
+    button_delete.grid(row=2, column=0, padx=10, pady=5, sticky='w')
+
+    button_view_pdf = tk.Button(tab, text="PDF보기", command=lambda: view_pdf(file_listbox, entry_directory), width=20, bg='green', fg='white')
+    button_view_pdf.grid(row=2, column=1, padx=10, pady=5, sticky='w')
+
     button_search = tk.Button(tab, text="검색", command=lambda: search_pattern(entry_directory, combo_doc_type, text_results, file_listbox), width=20, bg='blue', fg='white')
-    button_search.grid(row=1, column=2, padx=10, pady=5, sticky='w')
+    button_search.grid(row=2, column=2, padx=10, pady=5, sticky='w')
 
     frame_results = tk.Frame(tab)
-    frame_results.grid(row=2, column=0, columnspan=3, rowspan=2, padx=10, pady=10, sticky="nsew")
+    frame_results.grid(row=3, column=0, columnspan=3, rowspan=2, padx=10, pady=10, sticky="nsew")
 
     text_results = tk.Text(frame_results, height=20, width=80)
     text_results.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -374,7 +396,7 @@ def create_KeyValue_keit_tab(tab):
     text_results.config(yscrollcommand=scrollbar.set)
 
     frame_file_list = tk.Frame(tab)
-    frame_file_list.grid(row=0, column=3, rowspan=4, padx=10, pady=10, sticky="nsew")
+    frame_file_list.grid(row=0, column=3, rowspan=5, padx=10, pady=10, sticky="nsew")
 
     file_listbox = tk.Listbox(frame_file_list, height=40, width=30)
     file_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -385,14 +407,13 @@ def create_KeyValue_keit_tab(tab):
     file_listbox.config(yscrollcommand=scrollbar_file_list.set)
 
     text_results.tag_config("filename", font=("Helvetica", 12, "bold"), foreground="black")
-    text_results.tag_config("hyperlink", foreground="blue", underline=True)
-    text_results.tag_config("hyperlink_filename", font=("Helvetica", 12, "bold"), foreground="blue", underline=True)
+    text_results.tag_config("pdf_filename", font=("Helvetica", 12, "bold"), foreground="blue")
     text_results.tag_config("doctype", font=("Helvetica", 10, "bold"), foreground="purple")
     text_results.tag_config("pagenum", font=("Helvetica", 10, "italic"), foreground="green")
     text_results.tag_config("content", font=("Helvetica", 10), foreground="black")
     text_results.tag_config("subcontent", font=("Helvetica", 10, "italic"), foreground="grey")
 
-    tab.grid_rowconfigure(2, weight=1)
+    tab.grid_rowconfigure(3, weight=1)
     tab.grid_columnconfigure(3, weight=1)
 
 if __name__ == "__main__":
